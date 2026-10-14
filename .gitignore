@@ -1,0 +1,7 @@
+/lib/
+/.shards/
+/tmp/
+*.dwarf
+/erb_cr
+/shard.lock
+/shard.override.yml
