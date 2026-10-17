@@ -73,7 +73,14 @@ module ERB
     # Compiles an ERB-syntax template into a method returning
     # SafeString. `path` is resolved from the compile-time working
     # directory (like stdlib ECR).
+    #
+    # Crystal allows redefining a method — a duplicate name would
+    # silently shadow a handwritten helper (a runtime crash later,
+    # like a nil'd accessor), so collisions fail the build instead.
+    # Methods defined AFTER this macro call are not visible to the
+    # guard ({% @type.methods %} only sees the type so far).
     macro compile_template(name, path)
+      {% raise "compile_template: method '#{name.id}' is already defined in #{@type} — the compiled template would silently shadow it" if @type.methods.any? { |m| m.name.id == name.id } %}
       def {{ name.id }} : ERB::SafeString
         @__erb_buf = IO::Memory.new
         {{ run("./template_processor", path) }}
@@ -84,6 +91,7 @@ module ERB
     # Same, but the method takes a block: layouts use `<%= yield %>` /
     # `<%= yield :key %>` to inject the action's content.
     macro compile_layout(name, path)
+      {% raise "compile_layout: method '#{name.id}' is already defined in #{@type} — the compiled layout would silently shadow it" if @type.methods.any? { |m| m.name.id == name.id } %}
       def {{ name.id }}(&) : ERB::SafeString
         @__erb_buf = IO::Memory.new
         {{ run("./template_processor", path) }}
