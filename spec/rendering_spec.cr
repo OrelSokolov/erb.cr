@@ -31,6 +31,8 @@ class TestView
   compile_template "control_tpl", "#{__DIR__}/fixtures/control.html.erb"
   compile_template "block_tpl", "#{__DIR__}/fixtures/block.html.erb"
   compile_template "cf_tpl", "#{__DIR__}/fixtures/content_for.html.erb"
+  compile_template "dedent_off_tpl", "#{__DIR__}/fixtures/dedent.html.erb"
+  compile_template "dedent_on_tpl", "#{__DIR__}/fixtures/dedent.html.erb", dedent: true
   compile_layout "wrapped", "#{__DIR__}/fixtures/layout.html.erb"
 
   compile_partials({
@@ -65,6 +67,18 @@ describe "compiled templates" do
 
   it "runs control code, drops comments and applies Erubi trim" do
     VIEW.control_tpl.to_s.should eq("- a\n- b\ntail no")
+  end
+
+  it "keeps indentation in template output without dedent" do
+    VIEW.dedent_off_tpl.to_s.should eq(
+      "  <div>\n    <span>a</span>  <b>tail</b>\n  </div>\n" \
+      "  <div>\n    <span>b</span>  <b>tail</b>\n  </div>\n")
+  end
+
+  it "strips leading whitespace of each line with dedent, keeps same-line spaces" do
+    VIEW.dedent_on_tpl.to_s.should eq(
+      "<div>\n<span>a</span>  <b>tail</b>\n</div>\n" \
+      "<div>\n<span>b</span>  <b>tail</b>\n</div>\n")
   end
 
   it "keeps block helpers as the escaped expression" do

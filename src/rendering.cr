@@ -72,29 +72,31 @@ module ERB
 
     # Compiles an ERB-syntax template into a method returning
     # SafeString. `path` is resolved from the compile-time working
-    # directory (like stdlib ECR).
+    # directory (like stdlib ECR). `dedent: true` strips leading
+    # whitespace of each line from literal text at compile time, so
+    # indented sources render flat output (see template_processor.cr).
     #
     # Crystal allows redefining a method — a duplicate name would
     # silently shadow a handwritten helper (a runtime crash later,
     # like a nil'd accessor), so collisions fail the build instead.
     # Methods defined AFTER this macro call are not visible to the
     # guard ({% @type.methods %} only sees the type so far).
-    macro compile_template(name, path)
+    macro compile_template(name, path, dedent = false)
       {% raise "compile_template: method '#{name.id}' is already defined in #{@type} — the compiled template would silently shadow it" if @type.methods.any? { |m| m.name.id == name.id } %}
       def {{ name.id }} : ERB::SafeString
         @__erb_buf = IO::Memory.new
-        {{ run("./template_processor", path) }}
+        {{ run("./template_processor", path, dedent) }}
         ERB::SafeString.new(@__erb_buf.to_s)
       end
     end
 
     # Same, but the method takes a block: layouts use `<%= yield %>` /
     # `<%= yield :key %>` to inject the action's content.
-    macro compile_layout(name, path)
+    macro compile_layout(name, path, dedent = false)
       {% raise "compile_layout: method '#{name.id}' is already defined in #{@type} — the compiled layout would silently shadow it" if @type.methods.any? { |m| m.name.id == name.id } %}
       def {{ name.id }}(&) : ERB::SafeString
         @__erb_buf = IO::Memory.new
-        {{ run("./template_processor", path) }}
+        {{ run("./template_processor", path, dedent) }}
         ERB::SafeString.new(@__erb_buf.to_s)
       end
     end
@@ -108,13 +110,16 @@ module ERB
     #     "post" => {path: "app/views/_post.html.erb", locals: {"post" => Post}},
     #   })
     #
+    # `dedent: true` applies the compile-time dedent mode (see
+    # compile_template) to every partial in the map.
+    #
     # Locals become real local variables inside the compiled method, so
     # templates reference them bare (`<%= post.title %>`), exactly like
     # Rails partials. Crystal forbids `Object` as a generic argument,
     # so the locals-hash value type is the union of all local types
     # (plus Int32 for the collection counter), deduplicated by name —
     # duplicate args inside Union(...) crash the compiler.
-    macro compile_partials(partials)
+    macro compile_partials(partials, dedent = false)
       # Collect and dedupe (by name) the local types; Int32 is always
       # included — collection rendering passes a 0-based counter.
       {% local_types = [] of Nil %}
@@ -142,7 +147,7 @@ module ERB
         def __erb_partial_{{ name.id.gsub(/[^a-zA-Z0-9_]/, "_").id }}({% for key, type in defn[:locals] %}{{ key.id }} : {{ type }}, {% end %}) : ERB::SafeString
           outer = @__erb_buf
           @__erb_buf = IO::Memory.new
-          {{ run("./template_processor", defn[:path]) }}
+          {{ run("./template_processor", defn[:path], dedent) }}
           result = @__erb_buf.to_s
           @__erb_buf = outer
           ERB::SafeString.new(result)
