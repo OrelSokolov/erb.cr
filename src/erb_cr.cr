@@ -1,3 +1,4 @@
+require "attr_reader_cr"
 require "html"
 # erb_cr — ERB-синтаксис с семантикой Rails, компилируемый в методы-рендеры
 # на этапе сборки (через macro `run()`, как stdlib ECR).
