@@ -34,7 +34,13 @@ end
 # the trailing text newline; posts_index loses the one after `<% end %>`).
 
 i = 0
-pending_do = 0 # open `<%= expr do %>` expressions: `end` must also close the paren
+# Stack of constructs opened inside the template: :paren for
+# `<%= expr do %>` (its `end` must also close the `__erb_esc(` paren),
+# :plain for control-flow blocks (`if`/`unless`/`case`/`begin`/`do`).
+# An `<% end %>` always closes the innermost construct — matching them
+# with a flat counter mis-parses templates where a control block wraps
+# a block-helper call (rooms/_form).
+open_blocks = [] of Symbol
 at_line_start = false
 while open = input.index("<%", i)
   text = input[i...open]
@@ -55,17 +61,21 @@ while open = input.index("<%", i)
       print "__erb_out( ", expr, " )\n"
     elsif expr.ends_with?("do") || expr =~ /do\s+\|[^|]*\|\s*$/
       print "__erb_esc( ", expr, "\n"
-      pending_do += 1
+      open_blocks << :paren
     else
       print "__erb_esc( ", expr, " )\n"
     end
   else
     code = inner.strip
-    if code == "end" && pending_do > 0
-      print "end )\n"
-      pending_do -= 1
+    if code == "end" && (top = open_blocks.pop?)
+      print top == :paren ? "end )" : "end", "\n"
     else
       print inner, "\n"
+      # Statement-initial keywords only — trailing `if`/`unless`
+      # modifiers don't open blocks; `do` as the last token
+      # (iterator blocks) does.
+      open_blocks << :plain if code =~ /\A(if|unless|case|begin|while|until)\b/
+      open_blocks << :plain if code =~ /\bdo\s*(\|[^|]*\|)?\z/
     end
     # Erubi trim: drop one newline right after a code tag.
     if input[i]? == '\n'
