@@ -101,8 +101,12 @@ end
 
 describe "capture" do
   it "returns what the block appended and keeps a returned value" do
+    # Rails CaptureHelper: appended output → SafeString (html_safe),
+    # plain returned String passes through as-is.
     VIEW.capture { "ret" }.should eq("ret")
-    VIEW.capture { }.should eq("")
+    VIEW.capture { ERB::SafeString.new("<b>") }.to_s.should eq("<b>")
+    VIEW.capture { VIEW.__erb_out("x") }.to_s.should eq("x")
+    VIEW.capture { }.to_s.should eq("")
   end
 end
 

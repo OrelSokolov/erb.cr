@@ -37,7 +37,11 @@ module ERB
     end
 
     # Runs the block against a fresh buffer and returns what it wrote.
-    def capture(&) : String
+    # Rails CaptureHelper semantics: content APPENDED to the buffer is
+    # rendered output → SafeString (html_safe); a block that returned a
+    # value without appending keeps it as-is (plain String = unsafe,
+    # block helpers escape it; SafeString passes raw).
+    def capture(&) : String | SafeString
       outer = @__erb_buf
       @__erb_buf = IO::Memory.new
       result = yield
@@ -45,16 +49,16 @@ module ERB
       @__erb_buf = outer
       # A block whose body only `<%= %>s` appends directly; a block
       # that returns a value without appending keeps that value.
-      captured.empty? && result.is_a?(String | SafeString) ? result.to_s : captured
+      captured.empty? && result.is_a?(String | SafeString) ? result : SafeString.new(captured)
     end
 
     # content_for/provide: store a named content block for the layout.
     def content_for(key : String | Symbol, &) : Nil
-      store_content(key.to_s, SafeString.new(capture { yield }), force: true)
+      store_content(key.to_s, SafeString.new(capture { yield }.to_s), force: true)
     end
 
     def provide(key : String | Symbol, &) : Nil
-      store_content(key.to_s, SafeString.new(capture { yield }), force: false)
+      store_content(key.to_s, SafeString.new(capture { yield }.to_s), force: false)
     end
 
     def content_for?(key : String | Symbol) : Bool
