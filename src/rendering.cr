@@ -57,6 +57,12 @@ module ERB
       store_content(key.to_s, SafeString.new(capture { yield }.to_s), force: true)
     end
 
+    # content_for :key, value — the value form (Rails CaptureHelper):
+    # stores an already-rendered string (`content_for :sidebar, frame`).
+    def content_for(key : String | Symbol, value : String | SafeString) : Nil
+      store_content(key.to_s, value.is_a?(SafeString) ? value : SafeString.new(value), force: true)
+    end
+
     def provide(key : String | Symbol, &) : Nil
       store_content(key.to_s, SafeString.new(capture { yield }.to_s), force: false)
     end
@@ -163,12 +169,20 @@ module ERB
       # union — a macro-pasted union used as a call-site restriction
       # binds to the argument's own value type, breaking member casts
       # (Crystal 1.21; hash literals don't upcast to union values).
-      def __erb_render_partial(name : String, locals : Hash(String, ERBPartialLocal)) : ERB::SafeString
+      #
+      # The dispatcher itself takes a bare `Hash` (matches any generic
+      # instantiation — subclasses' unions differ) and its else-branch
+      # delegates through previous_def: partial registries MERGE along
+      # the inheritance chain (a controller's own partials shadow the
+      # parent's by name, everything else resolves in the parent —
+      # ApplicationController's layouts/lightbox is reachable from every
+      # controller, like Rails' shared partials).
+      def __erb_render_partial(name : String, locals : Hash) : ERB::SafeString
         case name
         {% for name, defn in partials %}
         when {{ name }} then __erb_partial_{{ name.id.gsub(/[^a-zA-Z0-9_]/, "_").id }}({% for key, type in defn[:locals] %}locals[{{ key }}].as({{ type }}), {% end %})
         {% end %}
-        else raise ArgumentError.new("Missing partial #{name.inspect}")
+        else super(name, locals)
         end
       end
 
@@ -212,6 +226,12 @@ module ERB
     # layout's `yield` returns it).
     def __erb_render_with_content(name : String | Symbol) : ERB::SafeString
       @__erb_content[name.to_s]? || SafeString.new("")
+    end
+
+    # Terminal of the __erb_render_partial previous_def chain (see
+    # compile_partials): an unknown partial name raises here.
+    def __erb_render_partial(name : String, locals : Hash) : ERB::SafeString
+      raise ArgumentError.new("Missing partial #{name.inspect}")
     end
   end
 end

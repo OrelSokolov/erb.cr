@@ -57,7 +57,12 @@ while open = input.index("<%", i)
   elsif inner.starts_with?("=")
     expr = inner[1..].strip
     # `yield` in layouts injects already-rendered (safe) content.
-    if expr.starts_with?("yield")
+    # `yield :key` reads the captured content_for block (the compiled
+    # layout method's block takes no arguments, so `yield :key` cannot
+    # pass the key through).
+    if expr =~ /\Ayield\s+(:[a-zA-Z_][a-zA-Z0-9_]*)\s*\z/
+      print "__erb_out( content_for(#{$1}) )\n"
+    elsif expr.starts_with?("yield")
       print "__erb_out( ", expr, " )\n"
     elsif expr.ends_with?("do") || expr =~ /do\s+\|[^|]*\|\s*$/
       print "__erb_esc( ", expr, "\n"
